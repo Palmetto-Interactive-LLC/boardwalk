@@ -28,6 +28,20 @@ let CONTROL_POINT = CBUUID(string: "2AD9")
 let KMH_PER_MPH = 1.6   // the firmware's conversion, not the true 1.609
 let STEP_MPH = 0.2
 let START_MPH = 1.4   // On ramps here unless a speed was set while stopped
+let DEFAULT_WEIGHT_LB = 170.0
+
+/// Estimated kcal per minute for flat walking (ACSM walking equation, gross, 5 kcal per litre O2).
+func kcalPerMinute(mph: Double, weightLb: Double) -> Double {
+    let vo2 = 0.1 * mph * 26.8224 + 3.5   // ml O2 / kg / min; 1 mph = 26.8224 m/min
+    return vo2 * weightLb * 0.453592 / 200
+}
+
+/// 12:34, or 1:02:03 past an hour.
+func clockString(_ t: TimeInterval) -> String {
+    let s = Int(t)
+    return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60)
+                     : String(format: "%d:%02d", s / 60, s % 60)
+}
 
 func log(_ msg: String) {
     let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/Boardwalk.log")
@@ -47,6 +61,13 @@ final class Treadmill: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
     @Published var minKmh = 0.8
     @Published var maxKmh = 6.4
     @Published var speedEntry = ""       // the "Set speed" text field
+    @Published var elapsed: TimeInterval = 0   // belt-moving time this session; pauses when stopped
+    @Published var kcal = 0.0
+    @Published var now = Date()
+    @Published var weightLb: Double = UserDefaults.standard.object(forKey: "weightLb") as? Double ?? DEFAULT_WEIGHT_LB {
+        didSet { UserDefaults.standard.set(weightLb, forKey: "weightLb") }
+    }
+    @Published var weightEntry = ""
 
     private var central: CBCentralManager!
     private var peripheral: CBPeripheral?
@@ -54,6 +75,7 @@ final class Treadmill: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
     private var ready = false            // belt is past the pre-workout countdown
     private var startedAt: Date?
     private var userDisconnected = false  // Disconnect pressed: stop auto-reconnecting
+    private var lastTick = Date()
 
     var running: Bool { speedKmh > 0 }
     var speedMph: Double { speedKmh / KMH_PER_MPH }
@@ -69,6 +91,29 @@ final class Treadmill: NSObject, ObservableObject, CBCentralManagerDelegate, CBP
                   Date().timeIntervalSince(t) > 3.5 else { return }
             self.becameReady()
         }
+        // Workout timer and clock. Integrates over real time so a late tick doesn't lose any.
+        Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            let t = Date()
+            let dt = t.timeIntervalSince(self.lastTick)
+            self.lastTick = t
+            self.now = t
+            guard self.running, dt < 10 else { return }   // skip gaps after sleep
+            self.elapsed += dt
+            self.kcal += kcalPerMinute(mph: self.speedMph, weightLb: self.weightLb) * dt / 60
+        }
+    }
+
+    func resetWorkout() {
+        elapsed = 0
+        kcal = 0
+        log("workout reset")
+    }
+
+    func setWeight(lb: Double) {
+        guard (50...700).contains(lb) else { return }
+        weightLb = lb.rounded()
+        log("weight \(weightLb) lb")
     }
 
     // MARK: commands
@@ -267,6 +312,23 @@ struct ControlView: View {
             .disabled(!t.connected)
 
             Divider()
+            HStack(alignment: .firstTextBaseline) {
+                stat(clockString(t.elapsed), "time")
+                stat("\(Int(t.kcal))", "kcal (est.)")
+                stat(t.now.formatted(date: .omitted, time: .shortened), "clock")
+            }
+            HStack {
+                Text("Weight").font(.caption).foregroundStyle(.secondary)
+                TextField(String(format: "%.0f", t.weightLb), text: $t.weightEntry)
+                    .frame(width: 50).font(.caption).onSubmit(applyWeight)
+                Text("lb").font(.caption).foregroundStyle(.secondary)
+                Spacer()
+                Button("Reset timer") { t.resetWorkout() }
+                    .font(.caption)
+                    .disabled(t.elapsed == 0 && t.kcal == 0)
+            }
+
+            Divider()
             HStack {
                 Circle().fill(t.connected ? .green : .orange).frame(width: 8, height: 8)
                 Text(t.status).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -282,6 +344,19 @@ struct ControlView: View {
         }
         .padding(16)
         .frame(width: 260)
+    }
+
+    private func stat(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 0) {
+            Text(value).font(.system(.title3, design: .rounded)).monospacedDigit()
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func applyWeight() {
+        if let v = Double(t.weightEntry) { t.setWeight(lb: v) }
+        t.weightEntry = ""
     }
 
     private func apply() {
@@ -363,7 +438,7 @@ struct MenuLabel: View {
     @ObservedObject var t: Treadmill
     var body: some View {
         if t.running {
-            Text(String(format: "🚶 %.1f", t.speedMph))
+            Text(String(format: "🚶 %.1f · ", t.speedMph) + clockString(t.elapsed)).monospacedDigit()
         } else {
             Image(systemName: t.connected ? "figure.walk" : "figure.walk.motion.trianglebadge.exclamationmark")
         }
