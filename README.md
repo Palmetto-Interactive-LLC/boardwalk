@@ -29,7 +29,8 @@ Lots of budget walking pads ship with a tiny remote that gets lost, or with no r
 - **Faster and slower** in 0.2 mph steps, plus **Set speed** for an exact number.
 - **Live speed** in mph and km/h, read straight from the treadmill.
 - **Stays connected.** It finds the treadmill on launch and reconnects on its own if the link drops.
-- **Menu bar too.** A walking-figure icon in the menu bar shows your speed and opens the same controls.
+- **Timer, calories and clock.** Walking time counts only while the belt moves, next to an estimated calorie count and the time of day.
+- **Menu bar too.** A walking-figure icon in the menu bar shows your speed and walking time, and opens the same controls.
 - **Automation-friendly.** `boardwalk://` links let Shortcuts, Raycast, Alfred or a Stream Deck drive it.
 
 It's a single Swift file with no dependencies, no account, no analytics, and no network access.
@@ -88,6 +89,7 @@ If you'd rather use your own Apple Development certificate, run `SIGN_IDENTITY="
 | **Off** | Stops the belt. |
 | **− / +** | Slower or faster by 0.2 mph. Presses during the start-up countdown are held and applied when it ends. |
 | **Set speed** | Type a speed in mph and press Return. If the belt is stopped, the next **On** uses that speed instead of 1.4. |
+| **Time · kcal · clock** | Walking time pauses when the belt stops and keeps adding up until you press **Reset timer**. Calories are an estimate from the standard ACSM walking equation, using your speed and the **Weight** you enter (170 lb until you change it). The timer resets when you quit the app. Weight is remembered. |
 | **Connect / Disconnect** | Boardwalk connects on its own. Disconnect frees the treadmill for its phone app. It's disabled while the belt is moving so you can't lose control mid-walk. |
 
 ### Shortcuts and automation
