@@ -21,7 +21,7 @@ Lots of budget walking pads ship with a tiny remote that gets lost, or with no r
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
-    <img src="docs/screenshot-light.png" width="260" alt="Boardwalk window showing 1.4 mph with On, Off, minus, plus and Set speed controls">
+    <img src="docs/screenshot-light.png" width="260" alt="Boardwalk window walking at 1.6 mph, with On, Off, minus, plus and Set speed controls, plus walking time, estimated calories and the clock">
   </picture>
 </p>
 
