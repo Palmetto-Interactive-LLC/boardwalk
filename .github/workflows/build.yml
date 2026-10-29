@@ -10,6 +10,9 @@ permissions:
 
 jobs:
   build:
+    # The one GitHub-hosted job left in the repo (Palmetto CI standard
+    # exception): Boardwalk.app needs macOS, and CodeBuild has macOS only on
+    # reserved Mac fleets. Hosted runners are free for this public repo.
     runs-on: macos-15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
