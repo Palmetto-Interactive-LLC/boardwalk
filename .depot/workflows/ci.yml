@@ -17,3 +17,25 @@ jobs:
           v=8.28.0
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${v}/gitleaks_${v}_linux_x64.tar.gz" | sudo tar -xz -C /usr/local/bin gitleaks
       - run: make ci
+
+  alert:
+    name: Alert on failure
+    needs: [ci]
+    if: failure() && github.ref == 'refs/heads/main'
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Post to incident.io (non-paging CI source)
+        shell: bash
+        env:
+          ALERT_URL: ${{ secrets.INCIDENT_IO_CI_ALERT_URL }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if test -z "$ALERT_URL"; then echo "::notice::No INCIDENT_IO_CI_ALERT_URL secret. Not alerting."; exit 0; fi
+          echo "::add-mask::$ALERT_URL"
+          payload="$(jq -nc --arg repo "$REPO" --arg sha "$GITHUB_SHA" --arg job "${DEPOT_JOB_URL:-}" \
+            '{title: "CI failed on main: \($repo)", description: "\($repo) @ \($sha[0:12]) CI failed. Run: \($job)", deduplication_key: "ci-\($repo)-\($sha)", status: "firing"}')"
+          code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 -X POST -H 'Content-Type: application/json' -d "$payload" "$ALERT_URL" 2>/dev/null || true)"
+          case "$code" in 2??) echo "Alert sent." ;; *) echo "::warning::incident.io alert returned HTTP ${code:-none}." ;; esac
