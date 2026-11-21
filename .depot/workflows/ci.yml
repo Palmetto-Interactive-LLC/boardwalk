@@ -1,17 +1,41 @@
 name: CI
 on:
   pull_request:
+  merge_group:
   push:
     branches: [main]
-permissions:
-  contents: read
+permissions: {}
 jobs:
   ci:
+    permissions:
+      contents: read
     runs-on: depot-ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Check PR title
+        shell: bash
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          MERGE_MESSAGE: ${{ github.event.merge_group.head_commit.message }}
+        run: |
+          set -euo pipefail
+          title="${PR_TITLE:-}"
+          if test -z "$title"; then title="${MERGE_MESSAGE:-}"; title="${title%%$'\n'*}"; fi
+          if test -z "$title"; then
+            echo "No pull request or merge queue title on this event. Nothing to check."
+            exit 0
+          fi
+          re='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([A-Za-z0-9._/,-]+\))?!?: [^ ].*$'
+          if [[ "$title" =~ $re ]] || [[ "$title" == 'Revert "'* ]]; then
+            echo "Title follows Conventional Commits."
+          else
+            echo "::error title=Title::The title must look like 'type(scope): subject'. Types: feat fix docs style refactor perf test build ci chore revert. Scope is optional; '!' marks a breaking change."
+            printf 'Got: %s\n' "$title"
+            exit 1
+          fi
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Install gitleaks
         run: |
           v=8.28.0
